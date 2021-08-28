@@ -14,10 +14,12 @@ func main() {
 	flag.StringVar(&startingURL, "url", "https://monzo.com", "a starting url from where the crawler should start crawling")
 	flag.Parse()
 
-	crawl(startingURL)
+	visitedLinks := make(map[string]bool)
+	url := removeTrailingSlash(startingURL)
+	crawl(url, &visitedLinks)
 }
 
-func crawl(url string) {
+func crawl(url string, visitedLinks *map[string]bool) {
 	fmt.Println("Visiting -> ", url)
 	fmt.Println("")
 
@@ -27,18 +29,24 @@ func crawl(url string) {
 		return
 	}
 
+	(*visitedLinks)[url] = true
+
 	links := extractLinks(nil, page)
-	fmt.Printf("List of links inside -> %s \n", url)
-	fmt.Println("")
+	// fmt.Printf("List of links inside -> %s \n", url)
+	// fmt.Println("")
 
 	for _, l := range links {
-		fmt.Printf("url -> %+v \n", l)
-		fmt.Println("")
+		// fmt.Printf("url -> %+v \n", l)
+		// fmt.Println("")
 
 		// crawl individual links in the same subdomain
 		if belongsToSubdomain(l, url) {
 			link := formatURL(l, url)
-			crawl(link)
+
+			// prevent crawling a URL twice
+			if !(*visitedLinks)[link] {
+				crawl(link, visitedLinks)
+			}
 		}
 	}
 
