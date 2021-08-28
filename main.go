@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/html"
 )
@@ -15,11 +16,18 @@ func main() {
 	flag.Parse()
 
 	visitedLinks := make(map[string]bool)
+	wg := &sync.WaitGroup{}
+	mtx := &sync.RWMutex{}
+
 	url := removeTrailingSlash(startingURL)
-	crawl(url, &visitedLinks)
+
+	wg.Add(1)
+	defer wg.Wait()
+	go crawl(url, &visitedLinks, wg, mtx)
 }
 
-func crawl(url string, visitedLinks *map[string]bool) {
+func crawl(url string, visitedLinks *map[string]bool, wg *sync.WaitGroup, mtx *sync.RWMutex) {
+	defer wg.Done()
 	fmt.Println("Visiting -> ", url)
 	fmt.Println("")
 
@@ -29,7 +37,9 @@ func crawl(url string, visitedLinks *map[string]bool) {
 		return
 	}
 
+	mtx.Lock()
 	(*visitedLinks)[url] = true
+	mtx.Unlock()
 
 	links := extractLinks(nil, page)
 	// fmt.Printf("List of links inside -> %s \n", url)
@@ -43,9 +53,14 @@ func crawl(url string, visitedLinks *map[string]bool) {
 		if belongsToSubdomain(l, url) {
 			link := formatURL(l, url)
 
+			mtx.RLock()
+			visited := (*visitedLinks)[link]
+			mtx.RUnlock()
+
 			// prevent crawling a URL twice
-			if !(*visitedLinks)[link] {
-				crawl(link, visitedLinks)
+			if !visited {
+				wg.Add(1)
+				go crawl(link, visitedLinks, wg, mtx)
 			}
 		}
 	}
