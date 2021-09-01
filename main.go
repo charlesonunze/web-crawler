@@ -3,11 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net/http"
-	"strings"
+	"os"
 	"sync"
+	"time"
 
-	"golang.org/x/net/html"
+	"github.com/charlesonunze/monzo/utils"
 )
 
 func main() {
@@ -19,111 +19,62 @@ func main() {
 	wg := &sync.WaitGroup{}
 	mtx := &sync.RWMutex{}
 
-	url := removeTrailingSlash(startingURL)
+	if startingURL == "" {
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	start := time.Now()
+
+	visitedLinks[startingURL] = true
 
 	wg.Add(1)
-	defer wg.Wait()
-	go crawl(url, &visitedLinks, wg, mtx)
+	go crawl(startingURL, startingURL, &visitedLinks, wg, mtx)
+	wg.Wait()
+
+	fmt.Println("Links visited ->", len(visitedLinks))
+	fmt.Println("Time taken ->", time.Since(start))
 }
 
-func crawl(url string, visitedLinks *map[string]bool, wg *sync.WaitGroup, mtx *sync.RWMutex) {
+func crawl(startingURL, currentLink string, visitedLinks *map[string]bool, wg *sync.WaitGroup, mtx *sync.RWMutex) {
 	defer wg.Done()
-	fmt.Println("Visiting -> ", url)
+
+	fmt.Println("")
+	fmt.Println("Visiting -> ", currentLink)
 	fmt.Println("")
 
-	page, err := getHTMLPage(url)
+	page, err := utils.GetHTMLPage(currentLink)
 	if err != nil {
-		fmt.Printf("error getting page %s %s\n", url, err)
+		// TODO implement a retry for failed links
+		fmt.Printf("error getting html page %s %s\n", currentLink, err)
 		return
 	}
 
-	mtx.Lock()
-	(*visitedLinks)[url] = true
-	mtx.Unlock()
+	wg2 := new(sync.WaitGroup)
 
-	links := extractLinks(nil, page)
-	// fmt.Printf("List of links inside -> %s \n", url)
-	// fmt.Println("")
+	links := utils.ExtractLinks(nil, page)
 
 	for _, l := range links {
-		// fmt.Printf("url -> %+v \n", l)
-		// fmt.Println("")
-
-		// crawl individual links in the same subdomain
-		if belongsToSubdomain(l, url) {
-			link := formatURL(l, url)
+		if utils.BelongsToSubdomain(l, startingURL) {
+			link := utils.FormatURL(l, currentLink)
+			fmt.Println("Found ->", link)
+			fmt.Println("")
 
 			mtx.RLock()
-			visited := (*visitedLinks)[link]
+			_, found := (*visitedLinks)[link]
 			mtx.RUnlock()
 
-			// prevent crawling a URL twice
-			if !visited {
-				wg.Add(1)
-				go crawl(link, visitedLinks, wg, mtx)
+			if !found {
+				mtx.Lock()
+				(*visitedLinks)[link] = true
+				mtx.Unlock()
+
+				wg2.Add(1)
+				go crawl(startingURL, link, visitedLinks, wg2, mtx)
 			}
 		}
 	}
+	wg2.Wait()
 
 	return
-}
-
-func getHTMLPage(url string) (*html.Node, error) {
-	r, err := http.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("cannot get page")
-	}
-
-	b, err := html.Parse(r.Body)
-	if err != nil {
-		return nil, fmt.Errorf("cannot parse page")
-	}
-
-	return b, err
-}
-
-func extractLinks(links []string, n *html.Node) []string {
-	if n.Type == html.ElementNode && n.Data == "a" {
-		for _, a := range n.Attr {
-			if a.Key == "href" {
-				links = append(links, a.Val)
-			}
-		}
-	}
-
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		links = extractLinks(links, c)
-	}
-
-	return links
-}
-
-func toWWW(url string) string {
-	if strings.Contains(url, "www") {
-		return url
-	}
-
-	return fmt.Sprintf("%s%s", "https://www.", strings.Split(url, "https://")[1])
-}
-
-func belongsToSubdomain(url, subdomain string) bool {
-	return strings.HasPrefix(url, "/") || strings.HasPrefix(url, subdomain) || strings.HasPrefix(url, toWWW(subdomain))
-}
-
-func removeTrailingSlash(url string) string {
-	return strings.TrimSuffix(url, "/")
-}
-
-func formatURL(url, subdomain string) string {
-	subdomain = removeTrailingSlash(subdomain)
-
-	if strings.HasPrefix(url, "/") {
-		if len(url) == 1 {
-			return subdomain
-		}
-
-		return fmt.Sprintf("%s%s", subdomain, removeTrailingSlash(url))
-	}
-
-	return removeTrailingSlash(url)
 }
