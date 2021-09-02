@@ -50,6 +50,9 @@ func main() {
 	for !terminate {
 		select {
 		case l := <-queue:
+			fmt.Println("Found -> ", l)
+			fmt.Println("")
+
 			mtx.RLock()
 			_, found := visitedLinks[l]
 			mtx.RUnlock()
