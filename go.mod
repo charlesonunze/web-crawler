@@ -2,4 +2,4 @@ module github.com/charlesonunze/monzo
 
 go 1.16
 
-require golang.org/x/net v0.0.0-20210825183410-e898025ed96a
+require golang.org/x/net v0.0.0-20210908191846-a5e095526f91
