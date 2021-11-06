@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charlesonunze/monzo/utils"
+	"github.com/charlesonunze/web-crawler/utils"
 )
 
 var waitChan = make(chan struct{}, 1000)
 
 func main() {
 	var startingURL string
-	flag.StringVar(&startingURL, "url", "https://monzo.com", "a starting url from where the crawler should start crawling")
+	flag.StringVar(&startingURL, "url", "https://github.com/charlesonunze", "a starting url from where the crawler should start crawling")
 	flag.Parse()
 
 	if startingURL == "" {

@@ -17,5 +17,5 @@ Install dependencies
 Run the program
 
 ```bash
-  go run . -url https://monzo.com
+  go run . -url https://github.com/charlesonunze
 ```
